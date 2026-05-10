@@ -15,7 +15,7 @@ from service_types import (
 
 #python -m streamlit run app.py
 
-st.set_page_config(page_title="NYC Metro Predictor", page_icon="🚇", layout="wide")
+st.set_page_config(page_title="NYC Metro Predictor",  layout="wide")
 st.markdown('<style>.titulo{color:#0066CC;font-size:2.5rem;font-weight:bold;text-align:center}</style>',
             unsafe_allow_html=True)
 
