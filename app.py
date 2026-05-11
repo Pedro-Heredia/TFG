@@ -5,8 +5,8 @@ from folium.plugins import HeatMap
 from streamlit_folium import st_folium
 from datetime import datetime, date
 import streamlit.components.v1 as components
-import predictor as p10
-from service_types import (
+import A10PredictorConXGBoost as p10
+from A11TiposDeServicioDeCadaParada import (
     get_stop_service_type, should_train_stop_here, STOP_SERVICE_TYPES, FULL_TIME_ONLY_ROUTES
 )
 
