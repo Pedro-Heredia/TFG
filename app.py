@@ -24,9 +24,8 @@ st.markdown('<style>.titulo{color:#0066CC;font-size:2.5rem;font-weight:bold;text
 # En el primer acceso no hay query params -> se inyecta JS que lee la hora
 # del cliente y recarga con _cd y _ct en la URL. En cargas posteriores ya
 # tenemos los valores y no se vuelve a redirigir.
-_params = st.experimental_get_query_params()
-_cd = _params.get('_cd', [None])[0]  # fecha cliente: YYYY-MM-DD
-_ct = _params.get('_ct', [None])[0]  # hora cliente:  HH:MM
+_cd = st.query_params.get('_cd')  # fecha cliente: YYYY-MM-DD
+_ct = st.query_params.get('_ct')  # hora cliente:  HH:MM
 
 if _cd is None:
     components.html("""<script>
