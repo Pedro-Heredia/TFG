@@ -4,7 +4,6 @@ import folium
 from folium.plugins import HeatMap
 from streamlit_folium import st_folium
 from datetime import datetime, date
-import streamlit.components.v1 as components
 import predictor as p10
 from service_types import (
     get_stop_service_type, should_train_stop_here, STOP_SERVICE_TYPES, FULL_TIME_ONLY_ROUTES
@@ -20,36 +19,7 @@ st.set_page_config(page_title="NYC Metro Predictor", page_icon="🚇", layout="w
 st.markdown('<style>.titulo{color:#0066CC;font-size:2.5rem;font-weight:bold;text-align:center}</style>',
             unsafe_allow_html=True)
 
-# Obtener fecha y hora local del navegador del usuario via JS.
-# En el primer acceso no hay query params -> se inyecta JS que lee la hora
-# del cliente y recarga con _cd y _ct en la URL. En cargas posteriores ya
-# tenemos los valores y no se vuelve a redirigir.
-_cd = st.query_params.get('_cd')  # fecha cliente: YYYY-MM-DD
-_ct = st.query_params.get('_ct')  # hora cliente:  HH:MM
-
-if _cd is None:
-    components.html("""<script>
-    (function(){
-        var d   = new Date();
-        var pad = function(n){ return String(n).padStart(2,'0'); };
-        var ds  = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-        var ts  = pad(d.getHours())+':'+pad(d.getMinutes());
-        var url = new URL(window.parent.location.href);
-        url.searchParams.set('_cd', ds);
-        url.searchParams.set('_ct', ts);
-        window.parent.location.href = url.toString();
-    })();
-    </script>""", height=0)
-    st.stop()
-
-try:
-    _fecha_cliente = date.fromisoformat(_cd)
-    _hora_cliente  = _ct if _ct else '00:00'
-except Exception:
-    _fecha_cliente = date.today()
-    _hora_cliente  = '00:00'
-
-ahora = datetime.now()
+ahora = datetime.utcnow()
 
 
 @st.cache_data
@@ -386,8 +356,8 @@ with col1:
             st.session_state.destino_nombre = destino_sel
 
 with col2:
-    hora_input = st.text_input("Hora (HH:MM):", placeholder=_hora_cliente)
-    fecha_input = st.date_input("Fecha de viaje:", value=_fecha_cliente, min_value=_fecha_cliente)
+    hora_input = st.text_input("Hora (HH:MM):", placeholder=ahora.strftime('%H:%M'))
+    fecha_input = st.date_input("Fecha de viaje:", value=date.today(), min_value=date.today())
     dow = fecha_input.weekday()
     st.caption(f" {DIAS_SEMANA[dow]}")
     btn_buscar = st.button(" Ejecutar Búsqueda", use_container_width=True, type="primary")
@@ -401,7 +371,7 @@ if btn_buscar:
     if not origen_input or not destino_input:
         st.warning("Selecciona un origen y un destino.")
     else:
-        hora_str = hora_input.strip() if hora_input.strip() else _hora_cliente
+        hora_str = hora_input.strip() if hora_input.strip() else ahora.strftime('%H:%M')
         origenes = buscar_estaciones_candidatas(
             origen_input, linea_orig_sel if linea_orig_sel != 'Todas' else None)
         destinos = buscar_estaciones_candidatas(
