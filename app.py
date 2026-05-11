@@ -4,8 +4,9 @@ import folium
 from folium.plugins import HeatMap
 from streamlit_folium import st_folium
 from datetime import datetime, date
-import predictor as p10
-from service_types import (
+import streamlit.components.v1 as components
+import A10PredictorConXGBoost as p10
+from A11TiposDeServicioDeCadaParada import (
     get_stop_service_type, should_train_stop_here, STOP_SERVICE_TYPES, FULL_TIME_ONLY_ROUTES
 )
 
@@ -15,9 +16,39 @@ from service_types import (
 
 #python -m streamlit run app.py
 
-st.set_page_config(page_title="NYC Metro Predictor",  layout="wide")
+st.set_page_config(page_title="NYC Metro Predictor", page_icon="🚇", layout="wide")
 st.markdown('<style>.titulo{color:#0066CC;font-size:2.5rem;font-weight:bold;text-align:center}</style>',
             unsafe_allow_html=True)
+
+# Obtener fecha y hora local del navegador del usuario via JS.
+# En el primer acceso no hay query params -> se inyecta JS que lee la hora
+# del cliente y recarga con _cd y _ct en la URL. En cargas posteriores ya
+# tenemos los valores y no se vuelve a redirigir.
+_params = st.experimental_get_query_params()
+_cd = _params.get('_cd', [None])[0]  # fecha cliente: YYYY-MM-DD
+_ct = _params.get('_ct', [None])[0]  # hora cliente:  HH:MM
+
+if _cd is None:
+    components.html("""<script>
+    (function(){
+        var d   = new Date();
+        var pad = function(n){ return String(n).padStart(2,'0'); };
+        var ds  = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+        var ts  = pad(d.getHours())+':'+pad(d.getMinutes());
+        var url = new URL(window.parent.location.href);
+        url.searchParams.set('_cd', ds);
+        url.searchParams.set('_ct', ts);
+        window.parent.location.href = url.toString();
+    })();
+    </script>""", height=0)
+    st.stop()
+
+try:
+    _fecha_cliente = date.fromisoformat(_cd)
+    _hora_cliente  = _ct if _ct else '00:00'
+except Exception:
+    _fecha_cliente = date.today()
+    _hora_cliente  = '00:00'
 
 ahora = datetime.now()
 
@@ -129,10 +160,10 @@ def buscar_estaciones_candidatas(texto, linea=None):
 
 
 def diagnosticar_sin_ruta(destino_nombre, linea_destino, hora_h, dow):
-    
-    #Devuelve (motivo_str, [lineas_alternativas]) si la parada tiene servicio especial
-    #no activo a esta hora. Devuelve (None, []) si el problema es otro.
-    
+    """
+    Devuelve (motivo_str, [lineas_alternativas]) si la parada tiene servicio especial
+    no activo a esta hora. Devuelve (None, []) si el problema es otro.
+    """
     if not linea_destino or linea_destino == 'Todas':
         return None, []
 
@@ -170,9 +201,9 @@ def diagnosticar_sin_ruta(destino_nombre, linea_destino, hora_h, dow):
     if stype == 'full_time':
         return None, []
 
-    # Verificar si esta activo a esta hora
+    # Verificar si está activo a esta hora
     if should_train_stop_here(linea_destino, sid_usado, hora_h, dow):
-        return None, []  # Esta activo, el problema es otro
+        return None, []  # Está activo, el problema es otro
 
     tipo_nombres = {
         'night_service':  'servicio nocturno (solo de 00:00 a 06:00h)',
@@ -208,9 +239,9 @@ def diagnosticar_sin_ruta(destino_nombre, linea_destino, hora_h, dow):
     return motivo, sorted(set(alternativas))
 
 
-
-#mapa
-
+# ============================================================================
+# FUNCIONES DE MAPA
+# ============================================================================
 
 def crear_mapa_general(lineas_activas, mostrar_hm=False, hora_hm=0, dow_hm=0):
     segmentos, nodos, colores = construir_datos_mapa()
@@ -301,8 +332,9 @@ def crear_mapa_ruta_especifica(opcion):
 
 
 
-#session state 
-
+# ============================================================================
+# SESSION STATE
+# ============================================================================
 defaults = {
     'opciones_ruta':      None,
     'origen_nombre':      '',
@@ -316,8 +348,9 @@ for key, val in defaults.items():
         st.session_state[key] = val
 
 
-# interfa
-
+# ============================================================================
+# INTERFAZ PRINCIPAL
+# ============================================================================
 st.markdown('<div class="titulo"> NYC Metro Predictor</div><br>', unsafe_allow_html=True)
 paradas_por_linea = obtener_paradas_por_linea()
 LINEAS_OPCIONES = ['Todas'] + sorted(p10.LINEAS_VALIDAS)
@@ -354,8 +387,8 @@ with col1:
             st.session_state.destino_nombre = destino_sel
 
 with col2:
-    hora_input = st.text_input("Hora (HH:MM):", placeholder=ahora.strftime('%H:%M'))
-    fecha_input = st.date_input("Fecha de viaje:", value=date.today())
+    hora_input = st.text_input("Hora (HH:MM):", placeholder=_hora_cliente)
+    fecha_input = st.date_input("Fecha de viaje:", value=_fecha_cliente, min_value=_fecha_cliente)
     dow = fecha_input.weekday()
     st.caption(f" {DIAS_SEMANA[dow]}")
     btn_buscar = st.button(" Ejecutar Búsqueda", use_container_width=True, type="primary")
@@ -369,8 +402,7 @@ if btn_buscar:
     if not origen_input or not destino_input:
         st.warning("Selecciona un origen y un destino.")
     else:
-        hora_str = hora_input.strip() if hora_input.strip() \
-            else f"{datetime.now().hour:02d}:{datetime.now().minute:02d}"
+        hora_str = hora_input.strip() if hora_input.strip() else _hora_cliente
         origenes = buscar_estaciones_candidatas(
             origen_input, linea_orig_sel if linea_orig_sel != 'Todas' else None)
         destinos = buscar_estaciones_candidatas(
@@ -383,7 +415,7 @@ if btn_buscar:
             ld = linea_dest_sel if linea_dest_sel != 'Todas' else None
             hora_h_calc = int(hora_str.split(':')[0])
 
-            # Guardar contexto para el diagnostico posterior
+            # Guardar contexto para el diagnóstico posterior
             st.session_state.linea_dest_busqueda = ld
             st.session_state.hora_h_busqueda     = hora_h_calc
             st.session_state.dow_busqueda        = dow
@@ -401,12 +433,14 @@ if btn_buscar:
                         linea_origen=lo, linea_destino=ld)
 
 
-# RENDER
+# ============================================================================
+# RENDERIZADO: RESULTADOS O MAPA GENERAL
+# ============================================================================
 if st.session_state.opciones_ruta is not None:
     opciones = st.session_state.opciones_ruta
 
     if len(opciones) == 0:
-        # Diagnostico de por que no hay ruta
+        # Diagnóstico de por qué no hay ruta
         motivo, alternativas = diagnosticar_sin_ruta(
             destino_input,
             st.session_state.linea_dest_busqueda,
@@ -533,7 +567,7 @@ if st.session_state.opciones_ruta is not None:
                       width="100%", height=700, key="map_res")
 
 else:
-    # MAPA PRINCIPAL 
+    # ---- MAPA GENERAL ----
     st.subheader(" Mapa Interactivo de la Red Actual")
     col_ctrl, col_mapa = st.columns([1, 4])
     with col_ctrl:
