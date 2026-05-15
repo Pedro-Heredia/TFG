@@ -3,7 +3,8 @@ import pandas as pd
 import folium
 from folium.plugins import HeatMap
 from streamlit_folium import st_folium
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+from streamlit_javascript import st_javascript
 import predictor as p10
 from service_types import (
     get_stop_service_type, should_train_stop_here, STOP_SERVICE_TYPES, FULL_TIME_ONLY_ROUTES
@@ -19,7 +20,11 @@ st.set_page_config(page_title="NYC Metro Predictor", page_icon="🚇", layout="w
 st.markdown('<style>.titulo{color:#0066CC;font-size:2.5rem;font-weight:bold;text-align:center}</style>',
             unsafe_allow_html=True)
 
-ahora = datetime.utcnow()
+_hora_navegador = st_javascript("new Date().toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit', hour12: false})")
+if _hora_navegador and isinstance(_hora_navegador, str) and ':' in _hora_navegador:
+    ahora = datetime.now().replace(hour=int(_hora_navegador.split(':')[0]), minute=int(_hora_navegador.split(':')[1]))
+else:
+    ahora = datetime.utcnow() + timedelta(hours=2)
 
 
 @st.cache_data
@@ -357,7 +362,7 @@ with col1:
 
 with col2:
     hora_input = st.text_input("Hora (HH:MM):", placeholder=ahora.strftime('%H:%M'))
-    fecha_input = st.date_input("Fecha de viaje:", value=date.today(), min_value=date.today())
+    fecha_input = st.date_input("Fecha de viaje:", value=date.today())
     dow = fecha_input.weekday()
     st.caption(f" {DIAS_SEMANA[dow]}")
     btn_buscar = st.button(" Ejecutar Búsqueda", use_container_width=True, type="primary")
@@ -371,7 +376,8 @@ if btn_buscar:
     if not origen_input or not destino_input:
         st.warning("Selecciona un origen y un destino.")
     else:
-        hora_str = hora_input.strip() if hora_input.strip() else ahora.strftime('%H:%M')
+        hora_str = hora_input.strip() if hora_input.strip() \
+            else f"{ahora.hour:02d}:{ahora.minute:02d}"
         origenes = buscar_estaciones_candidatas(
             origen_input, linea_orig_sel if linea_orig_sel != 'Todas' else None)
         destinos = buscar_estaciones_candidatas(
